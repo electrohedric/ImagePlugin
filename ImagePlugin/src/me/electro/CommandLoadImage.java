@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.Arrays;
 
 import javax.imageio.ImageIO;
@@ -130,23 +131,31 @@ public class CommandLoadImage implements CommandExecutor {
 		if(!validExtension) {
 			commandSender.sendMessage(ChatColor.RED + "URL '" + url + "' does not have supported image extension. Must be one of " 
 					+ Arrays.toString(validExtensions).replaceAll("\\[|\\]|\"", "") + "."); // remove all these: [ ] "
-			return false;
+			return true; // not a usage error
 		}
 		
 		// connect to the URL and see if the image can be read into ImageIO
 		BufferedImage image = null;
+		URL webServer;
+		URLConnection conn;
 		try {
-			URL webServer = new URL(url); // connect to the URL
-			InputStream inStream = webServer.openConnection().getInputStream(); // open the stream
+			webServer = new URL(url); // connect to the URL
+			conn = webServer.openConnection();
+			conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.4; en-US; rv:1.9.2.2) Gecko/20100316 Firefox/3.6.2");
+			InputStream inStream = conn.getInputStream(); // open the stream
 			image = ImageIO.read(inStream); // reroute it to the ImageIO library
 		} catch (MalformedURLException e) {
 			commandSender.sendMessage(ChatColor.RED + "Malformed URL: '" + url + "'. Resource probably not valid.");
-			return false;
+			return true; // not a usage error
 		} catch (IOException e) {
 			commandSender.sendMessage(ChatColor.RED + "IO Error: Couldn't read image. Sorry 'bout that.");
-			return false;
+			return true; // not a usage error
 		}
 		
+		if(image == null) {
+			commandSender.sendMessage(ChatColor.RED + "Couldn't read image. Sorry 'bout that.");
+			return true; // not a usage error
+		}
 		int imgWidth = image.getWidth();
 		int imgHeight = image.getHeight();
 		if(widthPreferred == -1 && heightPreferred != -1) { // width case: calculate new width to resize to given height
@@ -157,10 +166,11 @@ public class CommandLoadImage implements CommandExecutor {
 		// the only cases: both are -1 (no size is preferred) or both are not -1 (a preferred size has been supplied)
 		boolean needsResizing = widthPreferred != -1 && heightPreferred != -1;
 		if(needsResizing) {
-			commandSender.sendMessage(String.format("Retrieved image successfully. Resized from %dx%d to %dx%d", imgWidth, imgHeight, widthPreferred, heightPreferred));
+			commandSender.sendMessage(ChatColor.GRAY + String.format("Retrieved image successfully. Resized from %dx%d to %dx%d", imgWidth, imgHeight, widthPreferred, heightPreferred));
 		} else { // then no adjusted width or height are supplied, so set them to the actual size of the image
 			widthPreferred = imgWidth; // now these 100% refer to the width/height that will be in-game
 			heightPreferred = imgHeight;
+			commandSender.sendMessage(ChatColor.GRAY + String.format("Retrieved image successfully. Size is %dx%d", widthPreferred, heightPreferred));
 		}
 		
 		
@@ -170,16 +180,17 @@ public class CommandLoadImage implements CommandExecutor {
 		Direction widthDir; // original direction of the iterator
 		Direction heightDir; // secondary direction of the iterator
 		boolean flip = false;
+		commandSender.sendMessage(ChatColor.LIGHT_PURPLE + String.format("Player location " + loc));
 		
 		if(vertical) {
 			// each of these get 80 degrees of leeway
-			if(yaw > -40 && yaw < 40) { // +z faces 0
+			if(yaw > -40 && yaw <= 0 || yaw > 0 && yaw < -320) { // +z faces -360/0
 				startingLoc = startingLoc.add(0, 0, 1);
 				widthDir = Direction.POS_Z;
-			} else if(yaw > 50 && yaw < 130) { // -x faces 90
+			} else if(yaw > -310 && yaw < -230) { // -x faces -270
 				startingLoc = startingLoc.add(-1, 0, 0);
 				widthDir = Direction.NEG_X;
-			} else if(yaw > 140 && yaw <= 180 || yaw >= -180 && yaw < -140) { // -z facing 180/-180. split into two cases where the yaw switches from -180 -> 180
+			} else if(yaw > -220 && yaw < -140) { // -z facing -180
 				startingLoc = startingLoc.add(0, 0, -1);
 				widthDir = Direction.NEG_Z;
 			} else if(yaw > -130 && yaw < -50) { // +x faces -90
@@ -187,48 +198,48 @@ public class CommandLoadImage implements CommandExecutor {
 				widthDir = Direction.POS_X;
 			} else {
 				commandSender.sendMessage(ChatColor.RED + "Non-obvious facing direction. Face more toward the axis direction you want.");
-				return false;
+				return true; // not a usage error
 			}
 			heightDir = Direction.NEG_Y;
 			if(direction.equalsIgnoreCase("left")) { // arbitrarily going with right is standard, thus left is flipped
 				flip = true;
 			}
 		} else { // it must be "flat"
-			if(yaw > -80 && yaw < -10) { // +x faces -90 +z faces 0
+			if(yaw > -80 && yaw < -10) { // +x faces -90 +z faces -360/0
 				startingLoc = startingLoc.add(1, 0, 1);
 				widthDir = Direction.POS_Z;
 				heightDir = Direction.NEG_X;
-			} else if(yaw > 10 && yaw < 80) { // -x faces 90 +z faces 0
+			} else if(yaw > -350 && yaw < -280) { // -x faces -270 +z faces -360/0
 				startingLoc = startingLoc.add(-1, 0, 1);
 				widthDir = Direction.NEG_X;
 				heightDir = Direction.NEG_Z;
-			} else if(yaw > -170 && yaw < -100) { // +x faces -90 -z facing 180/-180
+			} else if(yaw > -170 && yaw < -100) { // +x faces -90 -z facing -180
 				startingLoc = startingLoc.add(1, 0, -1);
 				widthDir = Direction.NEG_Z;
 				heightDir = Direction.POS_X;
-			} else if(yaw > 100 && yaw < 170) { // -x faces 90 -z facing 180/-180
+			} else if(yaw > -260 && yaw < -190) { // -x faces -270 -z facing -180
 				startingLoc = startingLoc.add(-1, 0, -1);
 				widthDir = Direction.POS_X;
 				heightDir = Direction.POS_Z;
 			} else {
 				commandSender.sendMessage(ChatColor.RED + "Non-obvious facing direction. Face more toward the corner direction you want.");
-				return false;
+				return true; // not a usage error
 			}
 			if(direction.equalsIgnoreCase("top")) { // going with bottom is standard, thus top is flipped
 				flip = true;
 			}
 		}
-		startingLoc = heightDir.move(startingLoc, heightPreferred - 1); // move to the top if it is vertical or move out to the height if horizontal
+		commandSender.sendMessage(ChatColor.LIGHT_PURPLE + String.format("Initial image loc " + startingLoc));
+		startingLoc = heightDir.move(startingLoc, 1 - heightPreferred); // move to the top if it is vertical or move out to the height if horizontal
+		commandSender.sendMessage(ChatColor.LIGHT_PURPLE + String.format("Top image loc " + startingLoc));
 		if(startingLoc.getBlockY() > 255) {
-			commandSender.sendMessage(ChatColor.RED + "That would hit the skybox. Max height at this level is " + (heightPreferred - startingLoc.getBlockY() + 255));
-			return false;
+			commandSender.sendMessage(ChatColor.RED + "That would hit the skybox. Max height at this level is " + (heightPreferred - startingLoc.getBlockY() + 255) + ".");
+			return true; // not a usage error
 		}
 		
 		//TODO: now that we have all the directions sorted out... move to the height block from the starting coord and iterate through the image
 		// (we have to do this twice so probably make a method) check to ensure we hit no blocks
 		// also do some initial global bounds checking (with vertical only and < 256)
-		
-		//TODO: calculate if there's enough space within the world (i.e. won't hit any blocks nor go outside the world)
 		
 		// rotating first means that the width provided in the parameters is the fixed width in the world that the image will take up,
 		// not the width of the image before it is rotated (although I'm not expecting images to be rotated often)
@@ -265,19 +276,6 @@ public class CommandLoadImage implements CommandExecutor {
 			default: return null;
 			}
 		}
-		
-		Direction inverse() {
-			switch(this) {
-			case NEG_X: return POS_X;
-			case NEG_Y: return POS_Y;
-			case NEG_Z: return POS_Z;
-			case POS_X: return NEG_X;
-			case POS_Y: return NEG_Y;
-			case POS_Z: return NEG_Z;
-			default: return null;
-			}
-		}
-		
 	}
 	
 }
