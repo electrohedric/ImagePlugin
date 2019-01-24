@@ -1,0 +1,11 @@
+name: ImageLoader
+main: me.electro.Main
+author: https://github.com/electrohedric
+website: https://github.com/electrohedric
+version: 1.0.0
+api-version: 1.13
+description: Loads an image into the game from a url. The only command is /loadimage.
+commands:
+  loadimage:
+   description: Loads an image into the game from a url.
+   usage: "Usage: /<command> [url] [stand|flat] [left|right|top|bottom] <w=blocks> <h=blocks> <r=cw|ccw|180>"
