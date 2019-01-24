@@ -42,16 +42,18 @@ public class CommandLoadImage implements CommandExecutor {
 		String orientation = args[1];
 		String direction = args[2];
 		String dithering = args[3];
+		boolean vertical = false;
 		if(orientation.equalsIgnoreCase("stand")) {
 			if(!direction.equalsIgnoreCase("left") && !direction.equalsIgnoreCase("right")) {
 				commandSender.sendMessage(ChatColor.RED + "Orientation '" + orientation + "' must be one of 'left', 'right' since orientation is 'stand'.");
 				return false;
 			}
+			vertical = true;
 		} else if(orientation.equalsIgnoreCase("flat")) {
 			if(!direction.equalsIgnoreCase("bottom") && !direction.equalsIgnoreCase("top")) {
 				commandSender.sendMessage(ChatColor.RED + "Diretion '" + orientation + "' must be one of 'bottom', 'top' since orientation is 'flat'.");
 				return false;
-			}
+			} //vertical = false
 		} else {
 			commandSender.sendMessage(ChatColor.RED + "Direction '" + orientation + "' must be one of 'stand', 'flat'.");
 			return false;
@@ -154,10 +156,13 @@ public class CommandLoadImage implements CommandExecutor {
 		}
 		// the only cases: both are -1 (no size is preferred) or both are not -1 (a preferred size has been supplied)
 		boolean needsResizing = widthPreferred != -1 && heightPreferred != -1;
-		if(!needsResizing) { // then no adjusted width or height are supplied, so set them to the actual size of the image
+		if(needsResizing) {
+			commandSender.sendMessage(String.format("Retrieved image successfully. Resized from %dx%d to %dx%d", imgWidth, imgHeight, widthPreferred, heightPreferred));
+		} else { // then no adjusted width or height are supplied, so set them to the actual size of the image
 			widthPreferred = imgWidth; // now these 100% refer to the width/height that will be in-game
 			heightPreferred = imgHeight;
 		}
+		
 		
 		Location loc = Bukkit.getPlayer(commandSender.getName()).getLocation();
 		float yaw = loc.getYaw();
@@ -166,7 +171,7 @@ public class CommandLoadImage implements CommandExecutor {
 		Direction heightDir; // secondary direction of the iterator
 		boolean flip = false;
 		
-		if(orientation.equalsIgnoreCase("stand")) {
+		if(vertical) {
 			// each of these get 80 degrees of leeway
 			if(yaw > -40 && yaw < 40) { // +z faces 0
 				startingLoc = startingLoc.add(0, 0, 1);
@@ -213,6 +218,11 @@ public class CommandLoadImage implements CommandExecutor {
 				flip = true;
 			}
 		}
+		startingLoc = heightDir.move(startingLoc, heightPreferred - 1); // move to the top if it is vertical or move out to the height if horizontal
+		if(startingLoc.getBlockY() > 255) {
+			commandSender.sendMessage(ChatColor.RED + "That would hit the skybox. Max height at this level is " + (heightPreferred - startingLoc.getBlockY() + 255));
+			return false;
+		}
 		
 		//TODO: now that we have all the directions sorted out... move to the height block from the starting coord and iterate through the image
 		// (we have to do this twice so probably make a method) check to ensure we hit no blocks
@@ -236,6 +246,7 @@ public class CommandLoadImage implements CommandExecutor {
 		}
 		//TODO: finally paste the generated image into the world
 		//TODO: and do all this from a thread probably otherwise it might lag the server
+		//TODO: place barrier underneath the blocks to prevent falling sand falling
 		
 		return true;
 	}
