@@ -1,12 +1,17 @@
 package me.electro;
 
+import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.imageio.ImageIO;
 
@@ -144,6 +149,7 @@ public class CommandLoadImage implements CommandExecutor {
 			conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.4; en-US; rv:1.9.2.2) Gecko/20100316 Firefox/3.6.2"); //spoofy boi
 			InputStream inStream = conn.getInputStream(); // open the stream
 			image = ImageIO.read(inStream); // reroute it to the ImageIO library
+			inStream.close();
 		} catch (MalformedURLException e) {
 			commandSender.sendMessage(ChatColor.RED + "Malformed URL: '" + url + "'. Resource probably not valid.");
 			return true; // not a usage error
@@ -174,13 +180,12 @@ public class CommandLoadImage implements CommandExecutor {
 		}
 		
 		
-		Location loc = Bukkit.getPlayer(commandSender.getName()).getLocation();
-		float yaw = loc.getYaw();
-		Location startingLoc = loc.clone();
+		Location playerLoc = Bukkit.getPlayer(commandSender.getName()).getLocation();
+		float yaw = playerLoc.getYaw();
+		Location startingLoc = playerLoc.clone();
 		Direction widthDir; // original direction of the iterator
 		Direction heightDir; // secondary direction of the iterator
 		boolean flip = false;
-		commandSender.sendMessage(ChatColor.LIGHT_PURPLE + String.format("Player location " + loc));
 		
 		if(vertical) {
 			// each of these get 80 degrees of leeway
@@ -238,9 +243,10 @@ public class CommandLoadImage implements CommandExecutor {
 			return true; // not a usage error
 		}
 		// now that we're at the top of the image (startingLoc), we can just loop through all the image block locations
+		Location loc = startingLoc.clone();
 		int badBlocks = 0;
 		for(int dH = 0; dH < heightPreferred; dH++) {
-			for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop shoot them niggers
+			for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop
 				Block b = loc.getBlock();
 				Material mat = b.getType();
 				if(mat != Material.AIR && mat != Material.CAVE_AIR) { // because they added cave_air for some reason
@@ -251,14 +257,14 @@ public class CommandLoadImage implements CommandExecutor {
 			loc = widthDir.move(loc, -widthPreferred); // move widthPreferred times in the negative direction * 1 time
 			loc = heightDir.move(loc, 1); // move 1 time in the height direction * heightPreferred times
 		}
+		loc = startingLoc.clone();
+		// note: barrier blocks will be placed underneath the image where solid blocks are not already present to prevent sand from falling through
+		// we don't need to check for this because it will be a respectful replacement only replacing air. I mean, if it's solid, it's solid
 		if(badBlocks > 0) {
-			commandSender.sendMessage(ChatColor.RED + "There were " + badBlocks + " non-air blocks found. Not placed.");
+			commandSender.sendMessage(ChatColor.RED + "There are " + badBlocks + " blocks in the construction path of the image. Please remove them or find another location.");
 			return true; // not a usage error
 		}
-		
-		//TODO: now that we have all the directions sorted out... iterate through the image
-		// (we have to do this twice so probably make a method) check to ensure we hit no blocks
-		// also do some initial global bounds checking (with vertical only and < 256)
+		// but now we know that there is room in the world
 		
 		// rotating first means that the width provided in the parameters is the fixed width in the world that the image will take up,
 		// not the width of the image before it is rotated (although I'm not expecting images to be rotated often)
@@ -272,12 +278,36 @@ public class CommandLoadImage implements CommandExecutor {
 			image = Scalr.rotate(image, Scalr.Rotation.FLIP_HORZ, Scalr.OP_ANTIALIAS);
 		}
 		if(dither) {
+			//TODO: load in the map file for blocks -> color
+			InputStream is = getClass().getResourceAsStream("block_map.csv"); // TODO: yo can we load this on startup instead
+			InputStreamReader isr = new InputStreamReader(is);
+			BufferedReader br = new BufferedReader(isr);
+			Map<Color, String> map = new HashMap<>(); //FIXME: make this Color -> Material
+			String line;
+			try {
+				while((line = br.readLine()) != null) {
+					String[] data = line.split(",");
+					if(data.length == 4) {
+						int r = Integer.parseInt(data[1]);
+						int g = Integer.parseInt(data[2]);
+						int b = Integer.parseInt(data[3]);
+						map.put(new Color(r, g, b), data[0]); //FIXME: do a reverse lookup from name to material (if not exact, then change csv file to match)
+					}
+				}
+				is.close();
+				isr.close();
+				br.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (NumberFormatException e) {
+				e.printStackTrace();
+			}
 			//TODO: compute new image with floyd-steinburg dithering and minecraft blocks
 		}
 		//TODO: finally paste the generated image into the world
-		//TODO: and do all this from a thread probably otherwise it might lag the server
+		//TODO: and do all this from a thread probably otherwise it might lag the server?
 		//TODO: place barrier underneath the blocks to prevent falling sand falling
-		
+		//TODO: finally refactor this spaghoot into several methods
 		return true;
 	}
 	
@@ -296,5 +326,4 @@ public class CommandLoadImage implements CommandExecutor {
 			}
 		}
 	}
-	
 }
