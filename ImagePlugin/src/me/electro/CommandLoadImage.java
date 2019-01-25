@@ -13,6 +13,8 @@ import javax.imageio.ImageIO;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -136,12 +138,10 @@ public class CommandLoadImage implements CommandExecutor {
 		
 		// connect to the URL and see if the image can be read into ImageIO
 		BufferedImage image = null;
-		URL webServer;
-		URLConnection conn;
 		try {
-			webServer = new URL(url); // connect to the URL
-			conn = webServer.openConnection();
-			conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.4; en-US; rv:1.9.2.2) Gecko/20100316 Firefox/3.6.2");
+			URL webServer = new URL(url); // connect to the URL
+			URLConnection conn = webServer.openConnection();
+			conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.4; en-US; rv:1.9.2.2) Gecko/20100316 Firefox/3.6.2"); //spoofy boi
 			InputStream inStream = conn.getInputStream(); // open the stream
 			image = ImageIO.read(inStream); // reroute it to the ImageIO library
 		} catch (MalformedURLException e) {
@@ -229,15 +229,34 @@ public class CommandLoadImage implements CommandExecutor {
 				flip = true;
 			}
 		}
-		commandSender.sendMessage(ChatColor.LIGHT_PURPLE + String.format("Initial image loc " + startingLoc));
 		startingLoc = heightDir.move(startingLoc, 1 - heightPreferred); // move to the top if it is vertical or move out to the height if horizontal
 		commandSender.sendMessage(ChatColor.LIGHT_PURPLE + String.format("Top image loc " + startingLoc));
 		if(startingLoc.getBlockY() > 255) {
-			commandSender.sendMessage(ChatColor.RED + "That would hit the skybox. Max height at this level is " + (heightPreferred - startingLoc.getBlockY() + 255) + ".");
+			int maxHeight = heightPreferred - startingLoc.getBlockY() + 255; // calculate maximum height to reach world limit
+			int maxWidth = (int) ((float) imgWidth / imgHeight * maxHeight + 0.5f); // calculate ratio and compute new width. round to the nearest int
+			commandSender.sendMessage(ChatColor.RED + String.format("That would hit the skybox. Max size at this level is %dx%d.", maxWidth, maxHeight));
+			return true; // not a usage error
+		}
+		// now that we're at the top of the image (startingLoc), we can just loop through all the image block locations
+		int badBlocks = 0;
+		for(int dH = 0; dH < heightPreferred; dH++) {
+			for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop shoot them niggers
+				Block b = loc.getBlock();
+				Material mat = b.getType();
+				if(mat != Material.AIR && mat != Material.CAVE_AIR) { // because they added cave_air for some reason
+					badBlocks++;
+				}
+				loc = widthDir.move(loc, 1); // move 1 time in the width direction * widthPreferred times
+			}
+			loc = widthDir.move(loc, -widthPreferred); // move widthPreferred times in the negative direction * 1 time
+			loc = heightDir.move(loc, 1); // move 1 time in the height direction * heightPreferred times
+		}
+		if(badBlocks > 0) {
+			commandSender.sendMessage(ChatColor.RED + "There were " + badBlocks + " non-air blocks found. Not placed.");
 			return true; // not a usage error
 		}
 		
-		//TODO: now that we have all the directions sorted out... move to the height block from the starting coord and iterate through the image
+		//TODO: now that we have all the directions sorted out... iterate through the image
 		// (we have to do this twice so probably make a method) check to ensure we hit no blocks
 		// also do some initial global bounds checking (with vertical only and < 256)
 		
