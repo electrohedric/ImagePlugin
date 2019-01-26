@@ -1,17 +1,12 @@
 package me.electro;
 
-import java.awt.Color;
 import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 
 import javax.imageio.ImageIO;
 
@@ -20,16 +15,21 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.material.Mushroom;
+import org.bukkit.material.types.MushroomBlockTexture;
 import org.imgscalr.Scalr; // extremely simple imaging library. does antialiased resizing and rotating, which is all we need.
 
 public class CommandLoadImage implements CommandExecutor {
 
 	@Override
 	public boolean onCommand(CommandSender commandSender, Command command, String c, String[] args) {
+		
+		//if(commandSender.hasPermission("imageplugin.loadimage")) //FIXME
 		// first, find the player and make sure it's not sent from console
 		Player sender = null;
 		for(Player p : Bukkit.getOnlinePlayers()) {
@@ -39,9 +39,9 @@ public class CommandLoadImage implements CommandExecutor {
 		}
 		if(sender == null) {
 			commandSender.sendMessage(ChatColor.RED + "Bro, need to send from a player.");
-			commandSender.sendMessage(ChatColor.GREEN + "... but we letting this go though for sake of testing");
-			//return false; // uncomment for production
+			return false;
 		}
+		
 		
 		// second, make sure the command is syntactically and semantically valid
 		if(args.length < 4) // need at least a url, an orientation, a direction, and dithering
@@ -67,6 +67,7 @@ public class CommandLoadImage implements CommandExecutor {
 			return false;
 		}
 		boolean dither = Boolean.parseBoolean(dithering); // returns false for anything but "true", ignoring case
+		
 		
 		int widthPreferred = -1, heightPreferred = -1; // all of these are optional parameters, width and height will be maxed by default, rotation default is 0
 		Scalr.Rotation rotPreferred = null;
@@ -127,29 +128,10 @@ public class CommandLoadImage implements CommandExecutor {
 			}
 		}
 		
-		String[] validExtensions = ImageIO.getWriterFileSuffixes();
-		boolean validExtension = false;
-		for(String valid : validExtensions) {
-			if(url.toLowerCase().endsWith("." + valid.toLowerCase())) {  // compare valid extensions to url, ignoring case
-				validExtension = true;
-				break;
-			}
-		}
-		if(!validExtension) {
-			commandSender.sendMessage(ChatColor.RED + "URL '" + url + "' does not have supported image extension. Must be one of " 
-					+ Arrays.toString(validExtensions).replaceAll("\\[|\\]|\"", "") + "."); // remove all these: [ ] "
-			return true; // not a usage error
-		}
 		
-		// connect to the URL and see if the image can be read into ImageIO
 		BufferedImage image = null;
 		try {
-			URL webServer = new URL(url); // connect to the URL
-			URLConnection conn = webServer.openConnection();
-			conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.4; en-US; rv:1.9.2.2) Gecko/20100316 Firefox/3.6.2"); //spoofy boi
-			InputStream inStream = conn.getInputStream(); // open the stream
-			image = ImageIO.read(inStream); // reroute it to the ImageIO library
-			inStream.close();
+			image = loadImageFromURL(url);
 		} catch (MalformedURLException e) {
 			commandSender.sendMessage(ChatColor.RED + "Malformed URL: '" + url + "'. Resource probably not valid.");
 			return true; // not a usage error
@@ -158,8 +140,11 @@ public class CommandLoadImage implements CommandExecutor {
 			return true; // not a usage error
 		}
 		
+		
 		if(image == null) {
-			commandSender.sendMessage(ChatColor.RED + "Couldn't read image. Sorry 'bout that.");
+			String[] validExtensions = ImageIO.getWriterFileSuffixes();
+			commandSender.sendMessage(ChatColor.RED + "URL '" + url + "' does not have supported image extension. Must be one of " 
+					+ Arrays.toString(validExtensions).replaceAll("\\[|\\]|\"", "") + "."); // remove all these: [ ] "
 			return true; // not a usage error
 		}
 		int imgWidth = image.getWidth();
@@ -180,6 +165,7 @@ public class CommandLoadImage implements CommandExecutor {
 		}
 		
 		
+		// set up common variables for location and direction
 		Location playerLoc = Bukkit.getPlayer(commandSender.getName()).getLocation();
 		float yaw = playerLoc.getYaw();
 		Location startingLoc = playerLoc.clone();
@@ -187,9 +173,11 @@ public class CommandLoadImage implements CommandExecutor {
 		Direction heightDir; // secondary direction of the iterator
 		boolean flip = false;
 		
+		
+		// get the actual direction the player is facing which determines the direction of the iterator
 		if(vertical) {
 			// each of these get 80 degrees of leeway
-			if(yaw > -40 && yaw <= 0 || yaw > 0 && yaw < -320) { // +z faces -360/0
+			if(yaw > -40  || yaw < -320) { // +z faces -360/0
 				startingLoc = startingLoc.add(0, 0, 1);
 				widthDir = Direction.POS_Z;
 			} else if(yaw > -310 && yaw < -230) { // -x faces -270
@@ -234,37 +222,42 @@ public class CommandLoadImage implements CommandExecutor {
 				flip = true;
 			}
 		}
+		
+		
+		// test if the image is not high enough or too high up
 		startingLoc = heightDir.move(startingLoc, 1 - heightPreferred); // move to the top if it is vertical or move out to the height if horizontal
-		commandSender.sendMessage(ChatColor.LIGHT_PURPLE + String.format("Top image loc " + startingLoc));
 		if(startingLoc.getBlockY() > 255) {
 			int maxHeight = heightPreferred - startingLoc.getBlockY() + 255; // calculate maximum height to reach world limit
 			int maxWidth = (int) ((float) imgWidth / imgHeight * maxHeight + 0.5f); // calculate ratio and compute new width. round to the nearest int
 			commandSender.sendMessage(ChatColor.RED + String.format("That would hit the skybox. Max size at this level is %dx%d.", maxWidth, maxHeight));
 			return true; // not a usage error
+		} else if(playerLoc.getBlockY() <= 1) {
+			commandSender.sendMessage(ChatColor.RED + String.format("That would fall into the void. Image must start at minimum Y-level 2."));
+			return true; // not a usage error
 		}
+		
+		
+		// see if there is enough room in the world (i.e. the image won't destroy any blocks)
 		// now that we're at the top of the image (startingLoc), we can just loop through all the image block locations
 		Location loc = startingLoc.clone();
 		int badBlocks = 0;
 		for(int dH = 0; dH < heightPreferred; dH++) {
 			for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop
 				Block b = loc.getBlock();
-				Material mat = b.getType();
-				if(mat != Material.AIR && mat != Material.CAVE_AIR) { // because they added cave_air for some reason
+				if(!blockOk(b)) { // avoid solid blocks. blocks such as snow and grass should be okay to destroy
 					badBlocks++;
 				}
+				
 				loc = widthDir.move(loc, 1); // move 1 time in the width direction * widthPreferred times
 			}
 			loc = widthDir.move(loc, -widthPreferred); // move widthPreferred times in the negative direction * 1 time
 			loc = heightDir.move(loc, 1); // move 1 time in the height direction * heightPreferred times
 		}
-		loc = startingLoc.clone();
-		// note: barrier blocks will be placed underneath the image where solid blocks are not already present to prevent sand from falling through
-		// we don't need to check for this because it will be a respectful replacement only replacing air. I mean, if it's solid, it's solid
 		if(badBlocks > 0) {
 			commandSender.sendMessage(ChatColor.RED + "There are " + badBlocks + " blocks in the construction path of the image. Please remove them or find another location.");
 			return true; // not a usage error
 		}
-		// but now we know that there is room in the world
+		
 		
 		// rotating first means that the width provided in the parameters is the fixed width in the world that the image will take up,
 		// not the width of the image before it is rotated (although I'm not expecting images to be rotated often)
@@ -277,38 +270,128 @@ public class CommandLoadImage implements CommandExecutor {
 		if(flip) { // flipped so it, when drawn normally, faces the direction they intend which is opposite of 'standard'
 			image = Scalr.rotate(image, Scalr.Rotation.FLIP_HORZ, Scalr.OP_ANTIALIAS);
 		}
-		if(dither) {
-			//TODO: load in the map file for blocks -> color
-			InputStream is = getClass().getResourceAsStream("block_map.csv"); // TODO: yo can we load this on startup instead
-			InputStreamReader isr = new InputStreamReader(is);
-			BufferedReader br = new BufferedReader(isr);
-			Map<Color, String> map = new HashMap<>(); //FIXME: make this Color -> Material
-			String line;
-			try {
-				while((line = br.readLine()) != null) {
-					String[] data = line.split(",");
-					if(data.length == 4) {
-						int r = Integer.parseInt(data[1]);
-						int g = Integer.parseInt(data[2]);
-						int b = Integer.parseInt(data[3]);
-						map.put(new Color(r, g, b), data[0]); //FIXME: do a reverse lookup from name to material (if not exact, then change csv file to match)
-					}
+		
+		
+		// place barrier blocks underneath the image where needed to prevent falling sand ... well ... falling
+		if(vertical) { // place blocks only on the bottom ridge
+			loc = playerLoc.clone();
+			loc = widthDir.move(loc, 1); // move one accross to be at the width level the image actually starts
+			loc = loc.add(0, -1, 0); // move one down in the Y to place the barriers below the image
+			for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop
+				Block block = loc.getBlock();
+				Material type = block.getType();
+				if(type == Material.AIR || type == Material.CAVE_AIR) {
+					block.setType(Material.BARRIER);
 				}
-				is.close();
-				isr.close();
-				br.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			} catch (NumberFormatException e) {
-				e.printStackTrace();
+				
+				loc = widthDir.move(loc, 1); // move 1 time in the width direction * widthPreferred times
 			}
-			//TODO: compute new image with floyd-steinburg dithering and minecraft blocks
+		} else { // place blocks all under the entire image
+			loc = startingLoc.clone();
+			loc = loc.add(0, -1, 0); // move one down in the Y to place the barriers below the image
+			for(int dH = 0; dH < heightPreferred; dH++) {
+				for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop
+					Block block = loc.getBlock();
+					if(!blockOk(block)) {
+						block.setType(Material.BARRIER);
+					}
+					
+					loc = widthDir.move(loc, 1); // move 1 time in the width direction * widthPreferred times
+				}
+				loc = widthDir.move(loc, -widthPreferred); // move widthPreferred times in the negative direction * 1 time
+				loc = heightDir.move(loc, 1); // move 1 time in the height direction * heightPreferred times
+			}
 		}
-		//TODO: finally paste the generated image into the world
+		
+		
+		// image is ready to be dithered using a floyd-steinburg implementation and placed into the world at the same time while we gather the correct materials to use
+		loc = startingLoc.clone();
+		for(int dH = 0; dH < heightPreferred; dH++) {
+			for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop
+				int rgb = image.getRGB(dW, dH);
+				Color originalPixel = new Color(rgb);
+				Color quantizedPixel = originalPixel.quantize();
+				Material bestBlockMatch = Main.colorMap.get(quantizedPixel);
+				loc.getBlock().setType(bestBlockMatch, false); // set the material in the world, no gravity for falling blocks
+				if(bestBlockMatch == Material.BROWN_MUSHROOM_BLOCK) {
+					// need to set some metadata for the mushroom
+					BlockState state = loc.getBlock().getState();
+					Mushroom mushroom = (Mushroom) state.getData();
+					mushroom.setBlockTexture(MushroomBlockTexture.ALL_PORES); // set the mushroom to show all pores, which is the lighter texture
+					state.setData(mushroom);
+					state.update(false, false);
+				}
+				if(dither) { // if we're dithering, then just propagate the error which literally sets the pixels of the stored buffered image
+					Color error = quantizedPixel.errorFrom(originalPixel);
+					error.propagateError(image, dW + 1, dH, 0.4375f); // right
+					error.propagateError(image, dW + 1, dH + 1, 0.0625f); // bottom-right corner
+					error.propagateError(image, dW - 1, dH + 1, 0.1875f); // bottom-left corner
+					error.propagateError(image, dW, dH + 1, 0.3125f); // bottom
+				}
+				
+				loc = widthDir.move(loc, 1); // move 1 time in the width direction * widthPreferred times
+			}
+			loc = widthDir.move(loc, -widthPreferred); // move widthPreferred times in the negative direction * 1 time
+			loc = heightDir.move(loc, 1); // move 1 time in the height direction * heightPreferred times
+		}
+		
 		//TODO: and do all this from a thread probably otherwise it might lag the server?
-		//TODO: place barrier underneath the blocks to prevent falling sand falling
-		//TODO: finally refactor this spaghoot into several methods
-		return true;
+		return true; // success!
+	}
+	
+	private boolean blockOk(Block b) {
+		Material m = b.getType();
+		switch(m) { // all these materials have been hand-picked because they can die
+		case AIR:
+		case CAVE_AIR:
+		case GRASS:
+		case TALL_GRASS:
+		case WATER:
+		case KELP:
+		case KELP_PLANT:
+		case LAVA:
+		case SNOW:
+		case SUNFLOWER:
+		case ROSE_BUSH:
+		case POPPY:
+		case DANDELION:
+		case BLUE_ORCHID:
+		case ALLIUM:
+		case AZURE_BLUET:
+		case ORANGE_TULIP:
+		case PINK_TULIP:
+		case RED_TULIP:
+		case WHITE_TULIP:
+		case OXEYE_DAISY:
+		case PEONY:
+		case LILAC:
+		case FERN:
+		case LARGE_FERN:
+		case SEAGRASS:
+		case TALL_SEAGRASS:
+		case DEAD_BUSH:
+		case BROWN_MUSHROOM:
+		case RED_MUSHROOM:
+		case TORCH:
+		case REDSTONE_TORCH:
+		case LILY_PAD:
+		case VINE:
+			return true;
+		default:
+			return false;
+		}
+	}
+	
+	private BufferedImage loadImageFromURL(String url) throws IOException, MalformedURLException {
+		// connect to the URL and see if the image can be read into ImageIO
+		BufferedImage image = null;
+		URL webServer = new URL(url); // connect to the URL
+		URLConnection conn = webServer.openConnection();
+		conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.4; en-US; rv:1.9.2.2) Gecko/20100316 Firefox/3.6.2"); //spoofy boi
+		InputStream inStream = conn.getInputStream(); // open the stream
+		image = ImageIO.read(inStream); // reroute it to the ImageIO library
+		inStream.close();
+		return image;
 	}
 	
 	private enum Direction {
