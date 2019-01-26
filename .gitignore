@@ -3,3 +3,6 @@ ImagePlugin/spigot-1.13.2.jar
 ImagePlugin/craftbukkit-1.13.2.jar
 ImagePlugin/BuildTools.log.txt
 ImagePlugin/Spigot/
+ImagePlugin/world/
+ImagePlugin/world_nether/
+ImagePlugin/world_the_end/
