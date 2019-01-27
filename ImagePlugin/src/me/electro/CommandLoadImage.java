@@ -27,8 +27,7 @@ import org.imgscalr.Scalr; // extremely simple imaging library. does antialiased
 public class CommandLoadImage implements CommandExecutor {
 
 	@Override
-	public boolean onCommand(CommandSender commandSender, Command command, String c, String[] args) {
-		
+	public boolean onCommand(CommandSender commandSender, Command command, String c, String[] args) { //FIXME flat chunk issue, add replace option
 		//if(commandSender.hasPermission("imageplugin.loadimage")) //FIXME
 		// first, find the player and make sure it's not sent from console
 		Player sender = null;
@@ -40,6 +39,10 @@ public class CommandLoadImage implements CommandExecutor {
 		if(sender == null) {
 			commandSender.sendMessage(ChatColor.RED + "Bro, need to send from a player.");
 			return false;
+		}
+		if(args.length == 0)  {//XXX 
+			commandSender.sendMessage(ChatColor.LIGHT_PURPLE + String.format("%.1f", sender.getLocation().getYaw()));
+			return true;
 		}
 		
 		
@@ -147,6 +150,12 @@ public class CommandLoadImage implements CommandExecutor {
 					+ Arrays.toString(validExtensions).replaceAll("\\[|\\]|\"", "") + "."); // remove all these: [ ] "
 			return true; // not a usage error
 		}
+		
+		// rotating first means that the width provided in the parameters is the fixed width in the world that the image will take up,
+		// not the width of the image before it is rotated (although I'm not expecting images to be rotated often)
+		if(rotPreferred != null) {
+			image = Scalr.rotate(image, rotPreferred, Scalr.OP_ANTIALIAS);
+		}
 		int imgWidth = image.getWidth();
 		int imgHeight = image.getHeight();
 		if(widthPreferred == -1 && heightPreferred != -1) { // width case: calculate new width to resize to given height
@@ -167,7 +176,7 @@ public class CommandLoadImage implements CommandExecutor {
 		
 		// set up common variables for location and direction
 		Location playerLoc = Bukkit.getPlayer(commandSender.getName()).getLocation();
-		float yaw = playerLoc.getYaw();
+		float yaw = (playerLoc.getYaw() + 360) % 360; // normalize between 0-360, since rotation is modulo'd to either -360-0 or 0-360
 		Location startingLoc = playerLoc.clone();
 		Direction widthDir; // original direction of the iterator
 		Direction heightDir; // secondary direction of the iterator
@@ -176,17 +185,17 @@ public class CommandLoadImage implements CommandExecutor {
 		
 		// get the actual direction the player is facing which determines the direction of the iterator
 		if(vertical) {
-			// each of these get 80 degrees of leeway
-			if(yaw > -40  || yaw < -320) { // +z faces -360/0
+			// each of these get 80 degrees of leeway per direction. the last 10 degrees are considered in-between
+			if(yaw > 320  || yaw < 40) { // +z faces 0/360
 				startingLoc = startingLoc.add(0, 0, 1);
 				widthDir = Direction.POS_Z;
-			} else if(yaw > -310 && yaw < -230) { // -x faces -270
+			} else if(yaw > 50 && yaw < 130) { // -x faces 90
 				startingLoc = startingLoc.add(-1, 0, 0);
 				widthDir = Direction.NEG_X;
-			} else if(yaw > -220 && yaw < -140) { // -z facing -180
+			} else if(yaw > 140 && yaw < 220) { // -z facing 180
 				startingLoc = startingLoc.add(0, 0, -1);
 				widthDir = Direction.NEG_Z;
-			} else if(yaw > -130 && yaw < -50) { // +x faces -90
+			} else if(yaw > 230 && yaw < 310) { // +x faces 270
 				startingLoc = startingLoc.add(1, 0, 0);
 				widthDir = Direction.POS_X;
 			} else {
@@ -198,22 +207,22 @@ public class CommandLoadImage implements CommandExecutor {
 				flip = true;
 			}
 		} else { // it must be "flat"
-			if(yaw > -80 && yaw < -10) { // +x faces -90 +z faces -360/0
+			if(yaw > 280 && yaw < 350) { // +x faces 270 +z faces 0/360
 				startingLoc = startingLoc.add(1, 0, 1);
 				widthDir = Direction.POS_Z;
 				heightDir = Direction.NEG_X;
-			} else if(yaw > -350 && yaw < -280) { // -x faces -270 +z faces -360/0
+			} else if(yaw > 10 && yaw < 80) { // -x faces 90 +z faces 0/360
 				startingLoc = startingLoc.add(-1, 0, 1);
 				widthDir = Direction.NEG_X;
 				heightDir = Direction.NEG_Z;
-			} else if(yaw > -170 && yaw < -100) { // +x faces -90 -z facing -180
+			} else if(yaw > 190 && yaw < 260) { // +x faces 270 -z facing 180
 				startingLoc = startingLoc.add(1, 0, -1);
-				widthDir = Direction.NEG_Z;
-				heightDir = Direction.POS_X;
-			} else if(yaw > -260 && yaw < -190) { // -x faces -270 -z facing -180
-				startingLoc = startingLoc.add(-1, 0, -1);
 				widthDir = Direction.POS_X;
 				heightDir = Direction.POS_Z;
+			} else if(yaw > 100 && yaw < 170) { // -x faces 90 -z facing 180
+				startingLoc = startingLoc.add(-1, 0, -1);
+				widthDir = Direction.NEG_Z;
+				heightDir = Direction.POS_X;
 			} else {
 				commandSender.sendMessage(ChatColor.RED + "Non-obvious facing direction. Face more toward the corner direction you want.");
 				return true; // not a usage error
@@ -226,6 +235,7 @@ public class CommandLoadImage implements CommandExecutor {
 		
 		// test if the image is not high enough or too high up
 		startingLoc = heightDir.move(startingLoc, 1 - heightPreferred); // move to the top if it is vertical or move out to the height if horizontal
+		commandSender.sendMessage(ChatColor.LIGHT_PURPLE + "" + startingLoc.getBlock());
 		if(startingLoc.getBlockY() > 255) {
 			int maxHeight = heightPreferred - startingLoc.getBlockY() + 255; // calculate maximum height to reach world limit
 			int maxWidth = (int) ((float) imgWidth / imgHeight * maxHeight + 0.5f); // calculate ratio and compute new width. round to the nearest int
@@ -259,11 +269,6 @@ public class CommandLoadImage implements CommandExecutor {
 		}
 		
 		
-		// rotating first means that the width provided in the parameters is the fixed width in the world that the image will take up,
-		// not the width of the image before it is rotated (although I'm not expecting images to be rotated often)
-		if(rotPreferred != null) {
-			image = Scalr.rotate(image, rotPreferred, Scalr.OP_ANTIALIAS);
-		}
 		if(needsResizing) {
 			image = Scalr.resize(image, Scalr.Method.QUALITY, widthPreferred, heightPreferred, Scalr.OP_ANTIALIAS); // resize to the preferred and/or calculated height
 		}
@@ -279,8 +284,7 @@ public class CommandLoadImage implements CommandExecutor {
 			loc = loc.add(0, -1, 0); // move one down in the Y to place the barriers below the image
 			for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop
 				Block block = loc.getBlock();
-				Material type = block.getType();
-				if(type == Material.AIR || type == Material.CAVE_AIR) {
+				if(blockOk(block)) {
 					block.setType(Material.BARRIER);
 				}
 				
@@ -292,7 +296,7 @@ public class CommandLoadImage implements CommandExecutor {
 			for(int dH = 0; dH < heightPreferred; dH++) {
 				for(int dW = 0; dW < widthPreferred; dW++) { // after each width loop
 					Block block = loc.getBlock();
-					if(!blockOk(block)) {
+					if(blockOk(block)) {
 						block.setType(Material.BARRIER);
 					}
 					

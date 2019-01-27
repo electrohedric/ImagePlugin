@@ -18,16 +18,12 @@ public class Color {
 		this.b = b;
 	}
 	
-	public float lightness() {
-		return 0.2126f * r + 0.7152f * g + 0.0722f * b; // based on perceived lightness. green is much more prominent than the others because human eye.
-	}
-	
 	public Color quantize() {
 		Color recordHolder = null; // this is impossible to stay null, so we don't have to worry about null pointers
-		float recordDistance = 262144; // maximum possible distance theoretically
+		float recordDistance = Float.MAX_VALUE; // obviously everything else has to be smaller
 		for(Color guess : Main.colorMap.keySet()) { // loop through all possible block colors to get the closest one to this color
-			// distance is arbitrarily calculated with RGB and perceived lightness
-			float guessDistance = (float) (Math.abs(guess.r - r) + Math.abs(guess.g - g) + Math.abs(guess.b - b) + Math.abs(guess.lightness() - lightness()));
+			// distance is calculated with the euclidian distance adjusted for perceived lightness and sensitivity
+			float guessDistance = (float) (Math.pow((guess.r - r) * 0.3, 2) + Math.pow((guess.g - g) * 0.59, 2) + Math.pow((guess.b - b) * 0.11, 2));
 			if(guessDistance < recordDistance) { // run a minimize function on the color to get the closest distance
 				recordDistance = guessDistance;
 				recordHolder = guess;
