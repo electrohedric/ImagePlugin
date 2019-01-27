@@ -8,4 +8,6 @@ description: Loads an image into the game from a url. The only command is /loadi
 commands:
   loadimage:
    description: Loads an image into the game from a url.
-   usage: "Usage: /<command> [url] [stand|flat] [left|right|top|bottom] [dither] <w=blocks> <h=blocks> <r=cw|ccw|180>"
+   usage: "Usage: /<command> [url] [stand|flat] [left|right|top|bottom] {dither} {replace} {barriers} {w=blocks} {h=blocks} {r=cw|ccw|180}"
+   permission: imageplugin.loadimage
+   permission-message: You cannot use this command. You are a Jew.
