@@ -44,11 +44,12 @@ public class CommandLoadImage implements CommandExecutor {
 
 		
 		// second, make sure the command is syntactically and semantically valid
-		if(args.length < 4) // need at least a url, an orientation, a direction, and dithering
+		if(args.length < 3) // need at least a url, an orientation, a direction
 			return false;
 		String url = args[0];
 		String orientation = args[1];
 		String direction = args[2];
+		boolean max = false;
 		boolean vertical = false;
 		boolean dither = false;
 		boolean replace = false;
@@ -129,6 +130,8 @@ public class CommandLoadImage implements CommandExecutor {
 				replace = true;
 			} else if(keywordPair.equalsIgnoreCase("barriers")) {
 				barriers = true;
+			} else if(keywordPair.equalsIgnoreCase("max")) {
+				max = true;
 			} else {
 				commandSender.sendMessage(ChatColor.RED + "Unknown option '" + keywordPair + "'. Should be one of 'dither', 'replace', 'barriers'. Parameters require an '=' otherwise.");
 				return false;
@@ -162,6 +165,21 @@ public class CommandLoadImage implements CommandExecutor {
 		}
 		int imgWidth = image.getWidth();
 		int imgHeight = image.getHeight();
+		
+		Location playerLoc = Bukkit.getPlayer(commandSender.getName()).getLocation();
+		if(max) {
+			int maxHeight = vertical ? Math.min(256 - playerLoc.getBlockY(), imgHeight) : 400;
+			float heightRatio = (float) imgHeight / maxHeight;
+			float widthRatio = imgWidth / 400f;
+			if(widthRatio > heightRatio) {
+				widthPreferred = 400;
+				heightPreferred = (int) (imgHeight / widthRatio + 0.5f);
+			} else {
+				heightPreferred = maxHeight;
+				widthPreferred = (int) (imgWidth / heightRatio + 0.5f);
+			}
+		}
+		
 		if(widthPreferred == -1 && heightPreferred != -1) { // width case: calculate new width to resize to given height
 			widthPreferred = (int) ((float) imgWidth / imgHeight * heightPreferred + 0.5f); // calculate ratio and compute new width. round to the nearest int
 		} else if(widthPreferred != -1 && heightPreferred == -1) { // height case: calculate new height to resize to given width
@@ -177,13 +195,13 @@ public class CommandLoadImage implements CommandExecutor {
 			commandSender.sendMessage(ChatColor.GRAY + String.format("Retrieved image successfully. Size is %dx%d", widthPreferred, heightPreferred));
 		}
 		if(widthPreferred > 400 || heightPreferred > 400) {
-			commandSender.sendMessage(ChatColor.RED + "Image size too large. Resize to smaller than 400x400. You wouldn't be able to see the whole thing anyway.");
+			commandSender.sendMessage(ChatColor.RED + "Image size too large. Resize to smaller than 400x400.");
 			return true; // not a usage error
 		}
 		
 		
 		// set up common variables for location and direction
-		Location playerLoc = Bukkit.getPlayer(commandSender.getName()).getLocation();
+		
 		float yaw = (playerLoc.getYaw() + 360) % 360; // normalize between 0-360, since rotation is modulo'd to either -360-0 or 0-360
 		Location startingLoc = playerLoc.clone();
 		Direction widthDir; // original direction of the iterator

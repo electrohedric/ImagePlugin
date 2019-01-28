@@ -18,12 +18,33 @@ public class Color {
 		this.b = b;
 	}
 	
+	/**
+	 * Uses Euclidian distance, adjusted for human-perceived lightness
+	 */
+	private float distEA(Color c) {
+		return (float) (Math.pow((c.r - r), 2) * 0.3 + Math.pow((c.g - g), 2) * 0.59 + Math.pow((c.b - b), 2) * 0.11);
+	}
+	
+	/**
+	 * Uses Euclidian distance, slightly adjusted for human-perceived lightness, adjusted for the saturation effect
+	 */
+	private float distEAS(Color c) {
+		return (float) (Math.pow((c.r - r) * c.r / 255, 2) * 0.35 + Math.pow((c.g - g) * c.g / 255, 2) * 0.5 + Math.pow((c.b - b) * c.b / 255, 2) * 0.15);
+	}
+	
+	/**
+	 * Uses Euclidian distance, unadjusted
+	 */
+	private float distEU(Color c) {
+		return (float) (Math.pow((c.r - r), 2) + Math.pow((c.g - g), 2) + Math.pow((c.b - b), 2));
+	}
+	
 	public Color quantize() {
 		Color recordHolder = null; // this is impossible to stay null, so we don't have to worry about null pointers
 		float recordDistance = Float.MAX_VALUE; // obviously everything else has to be smaller
 		for(Color guess : Main.colorMap.keySet()) { // loop through all possible block colors to get the closest one to this color
 			// distance is calculated with the euclidian distance adjusted for perceived lightness and sensitivity
-			float guessDistance = (float) (Math.pow((guess.r - r) * 0.3, 2) + Math.pow((guess.g - g) * 0.59, 2) + Math.pow((guess.b - b) * 0.11, 2));
+			float guessDistance = distEA(guess);
 			if(guessDistance < recordDistance) { // run a minimize function on the color to get the closest distance
 				recordDistance = guessDistance;
 				recordHolder = guess;
