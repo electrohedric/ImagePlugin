@@ -192,3 +192,14 @@
 [14:52:42] [Server thread/INFO]: AntiNeutrino issued server command: /loadimage https://www.lawnstarter.com/blog/wp-content/uploads/2015/01/Yellow-st-augustine-lawn.jpg stand left true h=166
 [14:52:47] [Server thread/INFO]: AntiNeutrino issued server command: /loadimage https://www.lawnstarter.com/blog/wp-content/uploads/2015/01/Yellow-st-augustine-lawn.jpg stand left true h=167
 [14:52:57] [Server thread/INFO]: AntiNeutrino issued server command: /loadimage https://www.lawnstarter.com/blog/wp-content/uploads/2015/01/Yellow-st-augustine-lawn.jpg stand left true
+[14:55:24] [Server thread/INFO]: AntiNeutrino lost connection: Disconnected
+[14:55:24] [Server thread/INFO]: AntiNeutrino left the game
+[14:55:32] [Server thread/INFO]: Stopping the server
+[14:55:32] [Server thread/INFO]: Stopping server
+[14:55:32] [Server thread/INFO]: [ImageLoader] Disabling ImageLoader v1.0.0
+[14:55:32] [Server thread/INFO]: [ImageLoader] ImageLoader disabled.
+[14:55:32] [Server thread/INFO]: Saving players
+[14:55:32] [Server thread/INFO]: Saving worlds
+[14:55:32] [Server thread/INFO]: Saving chunks for level 'world'/minecraft:overworld
+[14:55:32] [Server thread/INFO]: Saving chunks for level 'world_nether'/minecraft:the_nether
+[14:55:32] [Server thread/INFO]: Saving chunks for level 'world_the_end'/minecraft:the_end
