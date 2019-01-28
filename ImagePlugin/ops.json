@@ -4,5 +4,11 @@
     "name": "AntiNeutrino",
     "level": 4,
     "bypassesPlayerLimit": false
+  },
+  {
+    "uuid": "f721ae05-f428-4837-8ffd-1852acd872f5",
+    "name": "electrohedric",
+    "level": 4,
+    "bypassesPlayerLimit": false
   }
 ]
